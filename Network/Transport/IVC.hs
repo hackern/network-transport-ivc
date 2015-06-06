@@ -15,6 +15,7 @@ import Control.Concurrent.MVar
 import Control.Concurrent.Chan
 import Data.List.Split (splitOn)
 
+import Hypervisor.Debug
 import Hypervisor.XenStore (XenStore, xsGetDomId,
                             xsRead, xsWrite, xsRemove, xsMakeDirectory,
                             xsSetPermissions, XSPerm(ReadWritePerm))
@@ -67,7 +68,7 @@ forkServer xs me handler =
       conns <- listKeys xs rootPath
       forM_ conns $ \connName -> do
         let from = EndPointAddress . BSC.pack $
-                     intercalate ":" (take 2 (splitOn ":" connName))
+                     intercalate "-" (take 2 (splitOn "-" connName))
         val <- xsRead xs (rootPath ++ "/" ++ connName)
         let to = EndPointAddress . BSC.pack $ val
         xsRemove xs (rootPath ++ "/" ++ connName)
@@ -119,7 +120,7 @@ apiConnect xs es from to = do
   connectId <- modifyMVar es $ \state -> do
     let connectId = nextLocalConnectionId state
     return (state { nextLocalConnectionId = connectId + 1 }, connectId)
-  let connName = endPointAddressToString from ++ ":" ++ show connectId
+  let connName = endPointAddressToString from ++ "-" ++ show connectId
       Just (other, _) = decodeEndPointAddress to
   xsWrite xs ("/transport/" ++ show other ++ "/" ++ connName)
              (endPointAddressToString to)
@@ -142,10 +143,10 @@ endPointAddressToString (EndPointAddress bs) =
 -- in the format of domXX:XX
 encodeEndPointAddress :: DomId -> EndPointId -> EndPointAddress
 encodeEndPointAddress domId ix =
-  EndPointAddress . BSC.pack $ show domId ++ ":" ++ show ix
+  EndPointAddress . BSC.pack $ show domId ++ "-" ++ show ix
 
 decodeEndPointAddress :: EndPointAddress -> Maybe (DomId, EndPointId)
 decodeEndPointAddress addr =
-  case splitOn ":" (endPointAddressToString addr) of
+  case splitOn "-" (endPointAddressToString addr) of
     h : t : _  -> Just (read h, read t)
     _ -> Nothing

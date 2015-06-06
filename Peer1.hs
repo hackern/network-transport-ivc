@@ -6,6 +6,7 @@ import Hypervisor.Debug
 
 import Control.Monad
 import Control.Concurrent
+import Control.Concurrent.MVar
 import Data.ByteString.Char8 as BSC
 
 main :: IO ()
@@ -13,18 +14,20 @@ main = do
   xs <- initXenStore
 
   transport <- createTransport xs
-  writeDebugConsole "transport created\n"
 
   endpoint1 <- newEndPoint transport
   endpoint2 <- newEndPoint transport
+
+  lock <- newEmptyMVar
   forkIO . forever $ do
-    writeDebugConsole "looping\n"
     event <- receive endpoint2
     case event of
-      ConnectionOpened _ addr -> writeDebugConsole $ "connection from" ++ show addr
-      Received _ [bs] -> writeDebugConsole $ "mesg: " ++ BSC.unpack bs
-  writeDebugConsole "endpoints created\n"
+      ConnectionOpened _ addr ->
+        writeDebugConsole $ "connection from " ++ show addr ++ "\n"
+      Received _ [bs] -> do 
+        writeDebugConsole $ (BSC.unpack bs) ++ "\n"
+        putMVar lock ()
 
-  -- connection <- connect endpoint1 (address endpoint2) 
-  writeDebugConsole "connection created\n" 
-
+  connection <- connect endpoint1 (address endpoint2) 
+  send connection $ [BSC.pack "hello, world"]
+  void . takeMVar $ lock

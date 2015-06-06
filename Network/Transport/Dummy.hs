@@ -5,7 +5,8 @@ import qualified Data.ByteString.Char8 as BSC
 import Data.Word (Word64)
 
 data Transport = Transport {
-    newEndPoint :: IO EndPoint
+    newEndPoint :: IO EndPoint,
+    closeTransport :: IO ()
 }
 
 data EndPoint = EndPoint {

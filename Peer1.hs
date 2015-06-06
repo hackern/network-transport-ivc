@@ -14,13 +14,11 @@ main = do
   xs <- initXenStore
 
   transport <- createTransport xs
-
-  endpoint1 <- newEndPoint transport
-  endpoint2 <- newEndPoint transport
+  endpoint <- newEndPoint transport
 
   lock <- newEmptyMVar
   forkIO . forever $ do
-    event <- receive endpoint2
+    event <- receive endpoint
     case event of
       ConnectionOpened _ addr ->
         writeDebugConsole $ "connection from " ++ show addr ++ "\n"
@@ -28,6 +26,5 @@ main = do
         writeDebugConsole $ (BSC.unpack bs) ++ "\n"
         putMVar lock ()
 
-  connection <- connect endpoint1 (address endpoint2) 
-  send connection $ [BSC.pack "hello, world"]
-  void . takeMVar $ lock
+  takeMVar lock
+  closeTransport transport

@@ -56,7 +56,13 @@ createTransport xs = do
   xsMakeDirectory xs rootPath
   xsSetPermissions xs rootPath [ReadWritePerm me]
   forkServer xs me (createHandler xs ts)
-  return Transport { newEndPoint = apiNewEndPoint xs transport }
+  return Transport { newEndPoint = apiNewEndPoint xs transport,
+                     closeTransport = apiCloseTransport xs me }
+
+-- should deal with connections in future
+apiCloseTransport :: XenStore -> DomId -> IO ()
+apiCloseTransport xs domId = do
+  removePath xs ("/transport/" ++ show domId)
 
 forkServer :: XenStore -> DomId
            -> (EndPointAddress -> EndPointAddress -> String -> IO ())

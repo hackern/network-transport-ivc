@@ -1,4 +1,4 @@
-import Network.Transport.Dummy
+import Network.Transport
 import Network.Transport.IVC
 
 import Hypervisor.XenStore
@@ -13,14 +13,14 @@ main :: IO ()
 main = do
   xs <- initXenStore
 
-  transport <- createTransport xs
-  endpoint <- newEndPoint transport
+  Right transport <- createTransport xs
+  Right endpoint <- newEndPoint transport
 
   lock <- newEmptyMVar
   forkIO . forever $ do
     event <- receive endpoint
     case event of
-      ConnectionOpened _ addr ->
+      ConnectionOpened _ _ addr ->
         writeDebugConsole $ "connection from " ++ show addr ++ "\n"
       Received _ [bs] -> do 
         writeDebugConsole $ (BSC.unpack bs) ++ "\n"

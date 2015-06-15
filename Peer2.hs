@@ -1,4 +1,4 @@
-import Network.Transport.Dummy
+import Network.Transport
 import Network.Transport.IVC
 import Network.Transport.IVC.Internal
 
@@ -23,12 +23,12 @@ main = do
   xs <- initXenStore
 
   serverDom : _ <- waitForDoms xs -- peers discovering
-  transport <- createTransport xs
+  Right transport <- createTransport xs
 
-  endpoint <- newEndPoint transport
+  Right endpoint <- newEndPoint transport
   let serverAddr = encodeEndPointAddress serverDom 0
-  connection <- connect endpoint serverAddr
-  send connection $ [BSC.pack "hello, world"]
+  Right conn <- connect endpoint serverAddr ReliableOrdered defaultConnectHints
+  send conn $ [BSC.pack "hello, world"]
 
   -- threadDelay 10000000
   closeTransport transport

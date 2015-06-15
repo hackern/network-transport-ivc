@@ -1,7 +1,7 @@
 module Network.Transport.IVC where
 -- export everything for testing
 
-import Network.Transport.Dummy
+import Network.Transport
 import Network.Transport.IVC.Internal
 
 import Data.Word (Word32)
@@ -10,6 +10,7 @@ import qualified Data.Map.Strict as M(Map, empty, lookup, insert)
 import Data.ByteString (ByteString)
 import qualified Data.ByteString.Char8 as BSC
 import Control.Monad
+import Control.Exception
 import Control.Concurrent
 import Control.Concurrent.MVar
 import Control.Concurrent.Chan
@@ -20,8 +21,8 @@ import Hypervisor.XenStore (XenStore, xsGetDomId,
                             xsRead, xsWrite, xsRemove, xsMakeDirectory,
                             xsSetPermissions, XSPerm(ReadWritePerm))
 import Hypervisor.DomainInfo (DomId)
-import Communication.IVC -- (InChannel, OutChannel, get, put)
-import Communication.Rendezvous --  (peerConnection)
+import Communication.IVC (InChannel, OutChannel, get, put)
+import Communication.Rendezvous (peerConnection)
 
 data IVCTransport = IVCTransport {
   transportDomId :: DomId,
@@ -46,7 +47,7 @@ data LocalEndPointState = LocalEndPointState {
 type EndPointId = Word32
 
 
-createTransport :: XenStore -> IO Transport
+createTransport :: XenStore -> IO (Either IOException Transport)
 createTransport xs = do
   me <- xsGetDomId xs
   ts <- newMVar (TransportState M.empty 0)
@@ -56,10 +57,10 @@ createTransport xs = do
   xsMakeDirectory xs rootPath
   xsSetPermissions xs rootPath [ReadWritePerm me]
   forkServer xs me (createHandler xs ts)
-  return Transport { newEndPoint = apiNewEndPoint xs transport,
-                     closeTransport = apiCloseTransport xs me }
+  return $ Right Transport { newEndPoint = apiNewEndPoint xs transport,
+                             closeTransport = apiCloseTransport xs me }
 
--- should deal with connections in future
+-- should deal with open connections in the future
 apiCloseTransport :: XenStore -> DomId -> IO ()
 apiCloseTransport xs domId = do
   removePath xs ("/transport/" ++ show domId)
@@ -97,12 +98,13 @@ createHandler xs ts from to connName =
     connectId <- modifyMVar es $ \state -> do
       let connectId = nextRemoteConnectionId state
       return (state { nextRemoteConnectionId = connectId + 1 }, connectId)
-    writeChan chan (ConnectionOpened connectId from)
+    writeChan chan (ConnectionOpened connectId ReliableOrdered from)
     forever $ do
       bs <- get inChan  -- expected to block while waiting
       writeChan chan (Received connectId [bs])
 
-apiNewEndPoint :: XenStore -> IVCTransport -> IO EndPoint
+apiNewEndPoint :: XenStore -> IVCTransport
+               -> IO (Either (TransportError NewEndPointErrorCode) EndPoint)
 apiNewEndPoint xs transport = do
   chan <- newChan
   es <- newMVar (LocalEndPointState 0 0)
@@ -115,14 +117,18 @@ apiNewEndPoint xs transport = do
               localEndPoints = M.insert addr localendpoint (localEndPoints state),
               nextEndPointId = nextEndPointId state + 1
             }, addr)
-  return EndPoint { receive = readChan chan,
-                    address = addr,
-                    connect = apiConnect xs es addr }
+  return $ Right EndPoint { receive = readChan chan,
+                            address = addr,
+                            connect = apiConnect xs es addr,
+                            newMulticastGroup = undefined,
+                            resolveMulticastGroup = undefined,
+                            closeEndPoint = return () }
 
 -- pass in client address to build unique connection name in xenstore
-apiConnect :: XenStore -> MVar LocalEndPointState
-              -> EndPointAddress -> EndPointAddress -> IO Connection
-apiConnect xs es from to = do
+apiConnect :: XenStore -> MVar LocalEndPointState -> EndPointAddress
+           -> EndPointAddress -> Reliability -> ConnectHints
+           -> IO (Either (transportError ConnectErrorCode) Connection)
+apiConnect xs es from to _ _ = do
   connectId <- modifyMVar es $ \state -> do
     let connectId = nextLocalConnectionId state
     return (state { nextLocalConnectionId = connectId + 1 }, connectId)
@@ -134,19 +140,21 @@ apiConnect xs es from to = do
       rightSide             :: XenStore -> IO (InChannel ByteString)
       (leftSide, rightSide) = peerConnection connName 1
   outChan <- leftSide xs
-  return Connection { send = apiSend outChan }
+  return $ Right Connection { send = apiSend outChan,
+                              close = return () }
 
 -- non-blocking semantics
-apiSend :: OutChannel ByteString -> [ByteString] -> IO ()
-apiSend outChan bss = void . forkIO $ do
-  forM_ bss $ \bs -> do
-    put outChan bs
+apiSend :: OutChannel ByteString -> [ByteString]
+        -> IO (Either (TransportError SendErrorCode) ())
+apiSend outChan bss = do
+  forkIO $ forM_ bss $ \bs -> put outChan bs
+  return $ Right ()
 
 endPointAddressToString :: EndPointAddress -> String
 endPointAddressToString (EndPointAddress bs) =
   BSC.unpack bs
 
--- in the format of domXX:XX
+-- in the format of domXX-XX
 encodeEndPointAddress :: DomId -> EndPointId -> EndPointAddress
 encodeEndPointAddress domId ix =
   EndPointAddress . BSC.pack $ show domId ++ "-" ++ show ix

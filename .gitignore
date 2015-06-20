@@ -1,6 +1,5 @@
+dist
 .*.swp
 *.hi
 *.o
 Peer?
-*/*.hi
-*/*.ho

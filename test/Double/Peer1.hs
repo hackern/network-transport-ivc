@@ -6,7 +6,7 @@ import Hypervisor.Debug
 
 import Control.Monad
 import Control.Concurrent
-import Control.Concurrent.MVar
+import Control.Concurrent.QSemN
 import Data.ByteString.Char8 as BSC
 
 main :: IO ()
@@ -16,15 +16,16 @@ main = do
   Right transport <- createTransport xs
   Right endpoint <- newEndPoint transport
 
-  lock <- newEmptyMVar
+  sem <- newQSemN 0
   forkIO . forever $ do
     event <- receive endpoint
     case event of
       ConnectionOpened _ _ addr ->
         writeDebugConsole $ "connection from " ++ show addr ++ "\n"
-      Received _ [bs] -> do 
-        writeDebugConsole $ (BSC.unpack bs) ++ "\n"
-        putMVar lock ()
+      Received _ bss -> do 
+        forM bss $ \bs ->
+          writeDebugConsole $ (BSC.unpack bs) ++ "\n"
+        signalQSemN sem 1
 
-  takeMVar lock
+  waitQSemN sem 10
   closeTransport transport

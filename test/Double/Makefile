@@ -6,3 +6,5 @@ run: $(BINARIES)
 	sudo xl create Peer2.config
 	sleep 2
 	sudo xl dmesg -c
+	-sudo xl destroy Peer1
+	-sudo xl destroy Peer2

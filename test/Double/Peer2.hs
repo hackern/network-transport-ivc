@@ -28,7 +28,8 @@ main = do
   Right endpoint <- newEndPoint transport
   let serverAddr = encodeEndPointAddress serverDom 0
   Right conn <- connect endpoint serverAddr ReliableOrdered defaultConnectHints
-  send conn $ [BSC.pack "hello, world"]
+  forM_ [0..9] $ \i ->
+    send conn [BSC.pack (show (2*i)), BSC.pack (show (2*i + 1))]
 
   -- threadDelay 10000000
   closeTransport transport

@@ -4,4 +4,4 @@ dist
 *.o
 Peer*
 Node*
-Throughput
+Main

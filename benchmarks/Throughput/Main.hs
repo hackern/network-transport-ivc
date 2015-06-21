@@ -61,7 +61,6 @@ initialProcess xs "SERVER" = do
   liftIO $ xsWrite xs "/process/counter-pid" (show (encode us))
   counter
 initialProcess xs "CLIENT" = do
-  us <- getSelfPid
   them <- liftIO $ decode . read <$> waitForKey xs "/process/counter-pid"
   count (10, 10) them
 

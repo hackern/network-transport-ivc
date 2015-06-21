@@ -3,6 +3,6 @@ include ../standard.mk
 
 run: $(BINARIES)
 	sudo xl create Peer.config
-	sleep 5
+	sleep 2
 	sudo xl dmesg -c
 	-sudo xl destroy Peer

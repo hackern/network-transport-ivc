@@ -8,6 +8,7 @@ import Data.Word (Word32)
 import Data.List (intercalate)
 import qualified Data.Map.Strict as M(Map, empty, lookup, insert)
 import Data.ByteString (ByteString)
+import qualified Data.ByteString as BS
 import qualified Data.ByteString.Char8 as BSC
 import Control.Monad
 import Control.Exception
@@ -16,13 +17,13 @@ import Control.Concurrent.MVar
 import Control.Concurrent.Chan
 import Data.List.Split (splitOn)
 
-import Hypervisor.Debug
 import Hypervisor.XenStore (XenStore, xsGetDomId,
                             xsRead, xsWrite, xsRemove, xsMakeDirectory,
                             xsSetPermissions, XSPerm(ReadWritePerm))
 import Hypervisor.DomainInfo (DomId)
 import Communication.IVC (InChannel, OutChannel, get, put)
 import Communication.Rendezvous (peerConnection)
+
 
 data IVCTransport = IVCTransport {
   transportDomId :: DomId,
@@ -85,9 +86,10 @@ forkServer xs me handler =
 -- handle imcoming connection to a transport (dommain)
 createHandler :: XenStore -> MVar TransportState
               -> EndPointAddress -> EndPointAddress -> String -> IO ()
-createHandler xs ts from to connName =
+createHandler xs ts from to connName = do
   void . forkIO $ do
-    state <- takeMVar ts
+    state <- readMVar ts
+    -- error occur if the endpoint does not exist
     let Just localendpoint    = M.lookup to (localEndPoints state)
         es                    = localEndPointState localendpoint
         chan                  = eventChan localendpoint
@@ -143,11 +145,10 @@ apiConnect xs es from to _ _ = do
   return $ Right Connection { send = apiSend outChan,
                               close = return () }
 
--- non-blocking semantics
 apiSend :: OutChannel ByteString -> [ByteString]
         -> IO (Either (TransportError SendErrorCode) ())
 apiSend outChan bss = do
-  forkIO $ forM_ bss $ \bs -> put outChan bs
+  put outChan (BS.concat bss)
   return $ Right ()
 
 endPointAddressToString :: EndPointAddress -> String

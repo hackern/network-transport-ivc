@@ -12,9 +12,7 @@ main = do
   xs <- initXenStore
   Right t <- createTransport xs
 
-  writeDebugConsole "debug\n"
   node <- newLocalNode t initRemoteTable
-  writeDebugConsole "debug\n"
   forkProcess node $ do
     self <- getSelfPid
     send self "hello, world"

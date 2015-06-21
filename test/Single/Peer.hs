@@ -16,6 +16,9 @@ main = do
   Right transport <- createTransport xs
   Right endpoint <- newEndPoint transport
 
+  Right conn <- connect endpoint (address endpoint)
+                        ReliableOrdered defaultConnectHints
+
   sem <- newQSemN 0
   forkIO . forever $ do
     event <- receive endpoint
@@ -27,10 +30,9 @@ main = do
           writeDebugConsole $ (BSC.unpack bs) ++ "\n"
         signalQSemN sem 1
 
-  Right conn <- connect endpoint (address endpoint)
-                        ReliableOrdered defaultConnectHints
-  forM_ [0..9] $ \i ->
-    send conn [BSC.pack (show (2*i)), BSC.pack (show (2*i + 1))]
+  let s = 10
+  forM_ [0..(s-1)] $ \i -> do
+    send conn [BSC.pack (show i)]
 
-  waitQSemN sem 10 
+  waitQSemN sem s 
   closeTransport transport

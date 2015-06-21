@@ -1,8 +1,11 @@
-module Network.Transport.IVC where
+module Network.Transport.IVC (
+  module Network.Transport.IVC,
+  module Network.Transport.IVC.Util
+) where
 -- export everything for testing
 
 import Network.Transport
-import Network.Transport.IVC.Internal
+import Network.Transport.IVC.Util
 
 import Data.Word (Word32)
 import Data.List (intercalate)

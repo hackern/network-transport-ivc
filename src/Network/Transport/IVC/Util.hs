@@ -1,4 +1,6 @@
-module Network.Transport.IVC.Internal (
+module Network.Transport.IVC.Util (
+  waitForDoms,
+  waitForKey,
   listKeys,
   removePath
 )
@@ -9,6 +11,7 @@ import Control.Exception
 import Control.Applicative
 
 import Hypervisor.XenStore
+import Hypervisor.DomainInfo
 import Hypervisor.ErrorCodes
 
 waitForKey :: XenStore -> String -> IO String
@@ -32,3 +35,12 @@ removePath xs str = do catch remSubItems onECContinue
     remItem     = xsRemove xs str
     onECContinue :: ErrorCode -> IO ()
     onECContinue _ = return ()
+
+waitForDoms :: XenStore -> Int -> IO [DomId]
+waitForDoms xs num = do
+  doms <- listKeys xs "/transport"
+  if length doms < num
+  then do
+    waitForDoms xs num
+  else
+    return $ read <$> doms

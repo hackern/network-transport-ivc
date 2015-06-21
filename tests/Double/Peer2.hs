@@ -1,6 +1,5 @@
 import Network.Transport
 import Network.Transport.IVC
-import Network.Transport.IVC.Internal
 
 import Hypervisor.DomainInfo
 import Hypervisor.XenStore
@@ -11,18 +10,11 @@ import Control.Concurrent
 import Control.Concurrent.MVar
 import Data.ByteString.Char8 as BSC
 
-waitForDoms :: XenStore -> IO [DomId]
-waitForDoms xs = do
-  doms <- listKeys xs "/transport"
-  case doms of
-    []    -> waitForDoms xs
-    _     -> return $ read `fmap` doms
-
 main :: IO ()
 main = do
   xs <- initXenStore
 
-  serverDom : _ <- waitForDoms xs -- peers discovering
+  serverDom : _ <- waitForDoms xs 1 -- peers discovering
   Right transport <- createTransport xs
 
   Right endpoint <- newEndPoint transport

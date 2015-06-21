@@ -2,6 +2,8 @@ dist
 .*.swp
 *.hi
 *.o
-Peer*
-Node*
+Peer
+Peer?
+Node
+Node?
 Main

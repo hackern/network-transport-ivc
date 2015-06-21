@@ -10,7 +10,6 @@ import Control.Distributed.Process
 import Control.Distributed.Process.Node
 import Network.Transport.IVC (createTransport, waitForDoms, waitForKey)
 import Data.Binary
-import qualified Data.ByteString.Lazy as BSL
 import Data.Typeable
 
 data SizedList a = SizedList { size :: Int , elems :: [a] }

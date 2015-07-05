@@ -1,8 +1,9 @@
 module Network.Transport.IVC.Util (
-  waitForDoms,
   waitForKey,
+  waitForKeys,
   listKeys,
-  removePath
+  removePath,
+  waitForDoms
 )
 where
 
@@ -36,11 +37,15 @@ removePath xs str = do catch remSubItems onECContinue
     onECContinue :: ErrorCode -> IO ()
     onECContinue _ = return ()
 
-waitForDoms :: XenStore -> Int -> IO [DomId]
-waitForDoms xs num = do
-  doms <- listKeys xs "/transport"
-  if length doms < num
+waitForKeys :: XenStore -> FilePath -> Int -> IO [String]
+waitForKeys xs path num = do
+  keys <- listKeys xs path
+  if length keys < num
   then do
-    waitForDoms xs num
+    threadDelay 100000
+    waitForKeys xs path num
   else
-    return $ read <$> doms
+    return keys
+
+waitForDoms :: XenStore -> Int -> IO [DomId]
+waitForDoms xs num = (read <$>) <$> waitForKeys xs "/transport" num

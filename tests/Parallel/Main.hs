@@ -3,6 +3,7 @@ import Hypervisor.DomainInfo
 import Hypervisor.XenStore
 import Hypervisor.Debug
 import Data.List
+import Data.Maybe
 import Control.Monad
 import Control.Applicative
 import Control.Distributed.Process
@@ -50,15 +51,36 @@ infixr 4 $$
 reduce :: [NodeId] -> RDD Float -> Closure (Reducer Float) -> Process Float
 reduce workers (RDD xs fs) g = do
   us <- getSelfPid
-  let numOfWorkers = length workers
-      slice = (length xs - 1) `div` numOfWorkers + 1
-  forM (zip workers [0..numOfWorkers-1]) $ \(worker, i) ->
-    spawn worker ($(mkClosure 'exec) (take slice (drop (i * slice) xs), fs, g, us))
   g' <- unReducer <$> unClosure g
-  firstResult <- expect :: Process Float
-  foldM (\result i -> do
-    partialResult <- expect :: Process Float
-    return (g' result partialResult)) firstResult [1..numOfWorkers-1] 
+  cpids <- forM (zip workers [0..numOfWorkers-1]) $ \(worker, i) -> do
+    cpid <- spawn worker ($(mkClosure 'exec) (take slice (drop (i * slice) xs), fs, g, us))
+    -- monitor cpid
+    return cpid
+  let go :: (Maybe Float) -> Int -> [(ProcessId, Int)] -> Int -> Process Float
+      go partial finished map nworkerIdx | finished == numOfWorkers =
+        return $ fromJust partial
+                                         | otherwise = do
+        (partial', finished', map', nworker') <- receiveWait [
+          match (\result -> do
+                  case partial of
+                    Nothing -> return (Just result, finished + 1, map, nworkerIdx)
+                    Just current -> return (Just (g' current result), finished + 1,
+                                            map, nworkerIdx)),
+          matchIf (\(ProcessMonitorNotification _ _ reason) -> reason /= DiedNormal)
+                  (\(ProcessMonitorNotification _ pid reason) -> do
+                    liftIO . writeDebugConsole $ show reason ++ "\n"
+                    let Just i = lookup pid map
+                        nworker = head $ drop nworkerIdx workers
+                    cpid <- spawn nworker ($(mkClosure 'exec)
+                                  (take slice (drop (i * slice) xs), fs, g, us))
+                    monitor cpid
+                    return (partial, finished, (cpid, i) : map,
+                            (nworkerIdx + 1) `mod` numOfWorkers))]
+        go partial' finished' map' nworker'
+  go Nothing 0 (zip cpids [0..numOfWorkers-1]) 0
+  where
+    numOfWorkers = length workers
+    slice = (length xs - 1) `div` numOfWorkers + 1
 
 driver :: [NodeId] -> Process ()
 driver workers = do
